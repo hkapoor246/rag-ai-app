@@ -38,6 +38,7 @@ This is a full-stack application that provides a private, Retrieval-Augmented Ge
 ```bash
 git clone <your-github-repo-url>
 cd rag-ai-app
+```
 
 ### 2. Backend Setup
 Navigate to the backend directory and set up the Python environment.
@@ -59,6 +60,7 @@ pip install -r requirements.txt
 export OPENAI_API_KEY="sk-..."
 export GOOGLE_API_KEY="..."
 export ANTHROPIC_API_KEY="sk-ant-..."
+```
 
 ### 3. Frontend Setup
 Navigate to the frontend directory from the root and install the Node packages.
@@ -69,19 +71,25 @@ cd frontend
 
 # Install the required Node packages
 npm install
+```
 
-### Running the Application
+## Running the Application
 You will need to run the backend and frontend servers in two separate terminal windows.
 
-#### Start the Backend Server
+### 1. Start the Backend Server
+```bash
 # In a terminal at the /backend directory (with venv active)
 # Make sure your API keys are set in this terminal session
 # Set TOKENIZERS_PARALLELISM to avoid warnings
 export TOKENIZERS_PARALLELISM=false; uvicorn app.main:app --reload
+```
 
-The backend will be running on http://localhost:8000.
+The backend will be running on `http://localhost:8000`.
 
-#### Start the Frontend Server
-
+### 2. Start the Frontend Server
+```bash
 # In a second terminal at the /frontend directory
 npm start
+```
+
+The frontend will open automatically in your browser at `http://localhost:3000`.
