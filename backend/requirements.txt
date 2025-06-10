@@ -1,0 +1,14 @@
+# backend/requirements.txt
+fastapi
+uvicorn[standard]
+python-multipart
+langchain
+langchain-community
+pypdf
+sentence-transformers
+chromadb
+langchain-chroma
+langchain-huggingface
+langchain-openai
+scikit-learn
+pandas
