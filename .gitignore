@@ -9,7 +9,7 @@
 # FRONTEND - From your VS Code template
 # =================================================
 # Dependencies
-/node_modules
+**/node_modules/**
 /.pnp
 .pnp.js
 

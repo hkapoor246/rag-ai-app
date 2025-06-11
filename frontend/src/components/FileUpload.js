@@ -1,30 +1,6 @@
+// src/components/FileUpload.js
 import React, { useState } from 'react';
 import axios from 'axios';
-
-// Define the styles within the component for simplicity
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-  },
-  input: {
-    marginBottom: '10px',
-  },
-  button: {
-    padding: '10px 20px',
-    fontSize: '16px',
-    cursor: 'pointer',
-    backgroundColor: '#61dafb',
-    border: 'none',
-    borderRadius: '5px',
-    color: '#282c34',
-  },
-  message: {
-    marginTop: '15px',
-    fontSize: '14px',
-  },
-};
 
 function FileUpload({ onUploadSuccess }) {
   const [file, setFile] = useState(null);
@@ -40,38 +16,34 @@ function FileUpload({ onUploadSuccess }) {
       setMessage('Please select a file first.');
       return;
     }
-
     const formData = new FormData();
     formData.append('file', file);
     setMessage('Uploading and processing...');
-
     try {
       const response = await axios.post('http://localhost:8000/upload/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-
       setMessage(response.data.detail || 'Upload successful!');
-
-      // *** NEW: Call the function passed from the parent page ***
-      if (onUploadSuccess) {
-        onUploadSuccess();
-      }
-
+      if (onUploadSuccess) { onUploadSuccess(); }
     } catch (error) {
       console.error('Error uploading file:', error);
-      setMessage('Error uploading file. Check the console for details.');
+      setMessage('Error uploading file. Check the console.');
     }
   };
 
   return (
-    <div style={styles.container}>
-      <input type="file" onChange={handleFileChange} style={styles.input} accept=".pdf" />
-      <button onClick={handleUpload} style={styles.button}>
+    <div className="space-y-4">
+      <input 
+        type="file" 
+        onChange={handleFileChange} 
+        accept=".pdf" 
+        className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+      />
+      <button onClick={handleUpload} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
         Upload
       </button>
-      {message && <p style={styles.message}>{message}</p>}
+      {message && <p className="text-sm text-center text-gray-300 mt-2">{message}</p>}
     </div>
   );
 }
-
 export default FileUpload;
