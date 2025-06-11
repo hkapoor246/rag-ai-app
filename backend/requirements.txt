@@ -12,3 +12,6 @@ langchain-huggingface
 langchain-openai
 scikit-learn
 pandas
+python-docx
+unstructured
+python-magic

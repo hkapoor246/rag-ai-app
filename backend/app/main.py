@@ -9,7 +9,7 @@ import pandas as pd
 from sklearn.manifold import TSNE
 
 # LangChain imports
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader, UnstructuredWordDocumentLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -147,20 +147,26 @@ async def chat_with_document(request: QueryRequest):
 @app.post("/upload/", tags=["Documents"])
 async def upload_document(file: UploadFile = File(...)):
     """
-    Accepts a PDF, processes it, and stores its embeddings in ChromaDB.
+    Accepts a PDF, docx, and txt files, processes it, and stores its embeddings in ChromaDB.
     """
-    # (The upload logic remains exactly the same as before)
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-
     file_path = os.path.join(UPLOAD_DIRECTORY, file.filename)
+    file_extension = os.path.splitext(file.filename)[1].lower()
 
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        print(f"Processing {file.filename}...")
-        loader = PyPDFLoader(file_path)
+        # --- Select loader based on file extension ---
+        if file_extension == ".pdf":
+            loader = PyPDFLoader(file_path)
+        elif file_extension == ".docx":
+            loader = UnstructuredWordDocumentLoader(file_path)
+        elif file_extension == ".txt":
+            loader = TextLoader(file_path)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
+
+        print(f"Processing {file.filename} with {loader.__class__.__name__}...")
         documents = loader.load()
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
