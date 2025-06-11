@@ -2,28 +2,34 @@
 
 import os
 import shutil
+from typing import List, Tuple # Import List and Tuple for type hinting
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import pandas as pd
 from sklearn.manifold import TSNE
 
-# LangChain imports
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader, UnstructuredWordDocumentLoader
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough, RunnableParallel
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage
+
 
 
 # --- Pydantic Models for API ---
+class ChatHistoryItem(BaseModel):
+    sender: str
+    text: str
+
 class QueryRequest(BaseModel):
     question: str
     model_name: str = Field(default="gpt-4o", description="The name of the model to use for the chat.")
+    chat_history: List[ChatHistoryItem] = Field(default=[], description="The previous messages in the conversation.")
 
 
 # --- Application Setup ---
@@ -105,32 +111,57 @@ async def chat_with_document(request: QueryRequest):
     try:
         print(f"Received chat request with model: {request.model_name}")
         
-        # --- DYNAMICALLY BUILD THE RAG CHAIN ---
-        # 1. Instantiate the LLM with the requested model name
+        # --- COMPLETELY NEW RAG CHAIN LOGIC FOR CONVERSATION ---
+
+        # 1. Instantiate the LLM
         llm = ChatOpenAI(model=request.model_name, temperature=0)
 
-        # 2. Define a function to format the retrieved documents
-        def format_docs(docs):
-            return "\n\n".join(doc.page_content for doc in docs)
+        # 2. Create a history-aware retriever chain
+        # This first chain condenses the user's question and the chat history into a single, standalone question.
+        contextualize_q_system_prompt = """Given a chat history and the latest user question \
+        which might reference context in the chat history, formulate a standalone question \
+        which can be understood without the chat history. Do NOT answer the question, \
+        just reformulate it if needed and otherwise return it as is."""
+        contextualize_q_prompt = ChatPromptTemplate.from_messages([
+            ("system", contextualize_q_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ])
+        history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
 
-        # 3. Define the RAG chain with the dynamic LLM
-        rag_chain_from_docs = (
-            RunnablePassthrough.assign(context=(lambda x: format_docs(x["context"])))
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
-        
-        # 4. Create a parallel chain that retrieves docs and generates the answer,
-        #    but also passes the original documents (context) through.
-        rag_chain_with_source = RunnableParallel(
-            {"context": retriever, "question": RunnablePassthrough()}
-        ).assign(answer=rag_chain_from_docs)
+        # 3. Create the main question-answering chain
+        # This chain takes the original question and the retrieved documents and generates an answer.
+        qa_system_prompt = """You are an assistant for question-answering tasks. \
+        Use the following pieces of retrieved context to answer the question. \
+        If you don't know the answer, just say that you don't know. \
+        Your answer should be detailed and well-formatted. Use Markdown for lists, bullet points, and bolding to improve readability.
 
-        # 5. Invoke the chain and get the result
-        result = rag_chain_with_source.invoke(request.question)
+        {context}"""
+        qa_prompt = ChatPromptTemplate.from_messages([
+            ("system", qa_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ])
+        question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
 
-        # 6. Format the sources for the frontend
+        # 4. Combine them into the final RAG chain
+        rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+
+        # 5. Format the chat history from the request into the format LangChain expects
+        formatted_chat_history = []
+        for msg in request.chat_history:
+            if msg.sender == 'user':
+                formatted_chat_history.append(HumanMessage(content=msg.text))
+            elif msg.sender == 'ai':
+                formatted_chat_history.append(AIMessage(content=msg.text))
+
+        # 6. Invoke the chain with the new question and the formatted history
+        result = rag_chain.invoke({
+            "chat_history": formatted_chat_history,
+            "input": request.question
+        })
+
+        # 7. Format sources for the response
         sources = []
         for doc in result["context"]:
             sources.append({
@@ -139,7 +170,7 @@ async def chat_with_document(request: QueryRequest):
             })
 
         return {"answer": result["answer"], "sources": sources}
-        
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred in the chat endpoint: {e}")
 

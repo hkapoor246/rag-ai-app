@@ -1,9 +1,9 @@
 // src/pages/ChatPage.js
-import React, { useState } from 'react';
+import React from 'react';
 import ChatWindow from '../components/ChatWindow';
 
-function ChatPage() {
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+// The component now receives all state and functions as props
+function ChatPage({ messages, setMessages, selectedModel, setSelectedModel }) {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-gray-800 p-4 rounded-lg shadow-lg mb-6">
@@ -19,7 +19,12 @@ function ChatPage() {
           <option value="gpt-3.5-turbo">GPT-3.5-Turbo (Fastest)</option>
         </select>
       </div>
-      <ChatWindow selectedModel={selectedModel} />
+      {/* Pass the props down one more level to the ChatWindow */}
+      <ChatWindow 
+        selectedModel={selectedModel}
+        messages={messages}
+        setMessages={setMessages}
+      />
     </div>
   );
 }
