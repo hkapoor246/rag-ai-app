@@ -3,17 +3,30 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 
+// A new component for displaying a single source
+function Source({ source, index }) {
+  return (
+    <div className="border border-gray-700 rounded-lg p-3 text-sm text-gray-300">
+      <p className="font-semibold text-white mb-2">Source {index + 1}: {source.source.split('/').pop()}</p>
+      <p className="line-clamp-3">{source.page_content}</p>
+    </div>
+  );
+}
+
 function ChatWindow({ selectedModel }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messageListRef = useRef(null);
+  
+  // New state to manage which message's sources are visible
+  const [visibleSources, setVisibleSources] = useState(null); 
 
   useEffect(() => {
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleSendMessage = async (event) => {
     event.preventDefault();
@@ -24,35 +37,53 @@ function ChatWindow({ selectedModel }) {
     
     setIsLoading(true);
     setInput('');
+    setVisibleSources(null); // Hide sources when a new message is sent
 
     try {
       const response = await axios.post('http://localhost:8000/chat/', {
         question: input,
         model_name: selectedModel
       });
-      const aiMessage = { sender: 'ai', text: response.data.answer };
+      // Add a unique ID to the AI message for tracking sources visibility
+      const aiMessage = { sender: 'ai', text: response.data.answer, sources: response.data.sources, id: Date.now() };
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
-      const errorMessage = { sender: 'ai', text: 'Sorry, I ran into an error. Please try again.' };
+      const errorMessage = { sender: 'ai', text: 'Sorry, I ran into an error. Please try again.', id: Date.now() };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const toggleSources = (messageId) => {
+    setVisibleSources(prev => (prev === messageId ? null : messageId));
+  };
+
   return (
     <div className="bg-gray-800 shadow-lg rounded-lg flex flex-col h-[70vh]">
       <div className="flex-grow p-6 space-y-6 overflow-y-auto" ref={messageListRef}>
-        {messages.map((message, index) => (
-          <div key={index} className={`flex items-start gap-4 ${message.sender === 'user' ? 'justify-end' : ''}`}>
-            {/* *** THE FIX IS HERE *** */}
+        {messages.map((message) => (
+          <div key={message.id || message.text} className={`flex flex-col ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
             <div className={`p-4 rounded-lg max-w-lg ${message.sender === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200'}`}>
-              {/* We apply styling to the div and remove it from ReactMarkdown */}
-              <div className="prose prose-invert">
+              <div className="prose prose-invert max-w-none">
                 <ReactMarkdown>{message.text}</ReactMarkdown>
               </div>
             </div>
+            {message.sender === 'ai' && message.sources && (
+              <div className="mt-2 w-full max-w-lg">
+                <button onClick={() => toggleSources(message.id)} className="text-xs text-blue-400 hover:underline">
+                  {visibleSources === message.id ? 'Hide Sources' : 'View Sources'}
+                </button>
+                {visibleSources === message.id && (
+                  <div className="mt-2 space-y-2">
+                    {message.sources.map((source, index) => (
+                      <Source key={index} source={source} index={index} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
         {isLoading && <div className="flex justify-start"><div className="bg-gray-700 p-4 rounded-lg">Thinking...</div></div>}

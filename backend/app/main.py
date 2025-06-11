@@ -17,6 +17,7 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 
 
 # --- Pydantic Models for API ---
@@ -106,19 +107,38 @@ async def chat_with_document(request: QueryRequest):
         
         # --- DYNAMICALLY BUILD THE RAG CHAIN ---
         # 1. Instantiate the LLM with the requested model name
-        llm = ChatOpenAI(model=request.model_name)
+        llm = ChatOpenAI(model=request.model_name, temperature=0)
 
-        # 2. Define the RAG chain with the dynamic LLM
-        rag_chain = (
-            {"context": retriever, "question": RunnablePassthrough()}
+        # 2. Define a function to format the retrieved documents
+        def format_docs(docs):
+            return "\n\n".join(doc.page_content for doc in docs)
+
+        # 3. Define the RAG chain with the dynamic LLM
+        rag_chain_from_docs = (
+            RunnablePassthrough.assign(context=(lambda x: format_docs(x["context"])))
             | prompt
             | llm
             | StrOutputParser()
         )
+        
+        # 4. Create a parallel chain that retrieves docs and generates the answer,
+        #    but also passes the original documents (context) through.
+        rag_chain_with_source = RunnableParallel(
+            {"context": retriever, "question": RunnablePassthrough()}
+        ).assign(answer=rag_chain_from_docs)
 
-        # 3. Invoke the chain with the question
-        answer = rag_chain.invoke(request.question)
-        return {"answer": answer}
+        # 5. Invoke the chain and get the result
+        result = rag_chain_with_source.invoke(request.question)
+
+        # 6. Format the sources for the frontend
+        sources = []
+        for doc in result["context"]:
+            sources.append({
+                "source": doc.metadata.get("source", "Unknown"),
+                "page_content": doc.page_content
+            })
+
+        return {"answer": result["answer"], "sources": sources}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred in the chat endpoint: {e}")
