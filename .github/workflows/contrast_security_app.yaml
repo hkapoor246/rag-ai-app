@@ -1,7 +1,7 @@
 # DISCLAIMER: This workflow file has been auto-generated and committed to the repo by the GitHub App from Contrast Security.
 # Manual edits to this file could cause the integration to produce unexpected behavior or break.
 # Version: 1.0.2
-# Last updated: 2026-02-07T03:01:40.255511577Z
+# Last updated: 2026-02-07T03:09:27.365890873Z
 name: Contrast Security SCA App Workflow
 on:
   workflow_dispatch:
